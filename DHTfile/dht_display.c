@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#define DHT_PIN 7 // wiringPi 기준 핀 번호
+#define DHT_PIN 5 // wiringPi 기준 핀 번호
 
 int dht22_read(float *temperature, float *humidity) {
     uint8_t bits[5] = {0};
