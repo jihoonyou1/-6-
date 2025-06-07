@@ -88,8 +88,8 @@ void read_dht_data()
         snprintf(line2, sizeof(line2), "Humi: %.1f %%", h);
         write_to_lcd(line1, line2);
     } else {
-        printf("Data not good, skip\n");
-        write_to_lcd("Sensor Error", "Retrying...");
+        //printf("Data not good, skip\n");
+        //write_to_lcd("Sensor Error", "Retrying...");
     }
 }
 
