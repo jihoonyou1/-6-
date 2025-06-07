@@ -54,17 +54,17 @@ void read_dht22() {
         float temperature = (((data[2] & 0x7F) << 8) + data[3]) * 0.1;
         if (data[2] & 0x80) temperature *= -1;
 
-        printf("온도: %.1f°C  습도: %.1f%%\n", temperature, humidity);
+        printf("temp: %.1f°C  humi: %.1f%%\n", temperature, humidity);
     } else {
-        printf("DHT22 데이터 읽기 실패\n");
+        printf("ERROR!\n");
     }
 }
 
 int main(void) {
-    printf("DHT22 센서 데이터 읽기 시작 (GPIO24)\n");
+    printf("DHT22 read (GPIO24)\n");
 
     if (wiringPiSetup() == -1) {
-        fprintf(stderr, "wiringPi 초기화 실패\n");
+        fprintf(stderr, "wiringPi ERROR\n");
         exit(1);
     }
 
