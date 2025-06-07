@@ -3,76 +3,75 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#define MAX_TIMINGS 85
-#define DHT_PIN 5
+#define DHT_PIN 7 // wiringPi 기준 핀 번호
 
-int data[5] = {0, 0, 0, 0, 0};
+int dht22_read(float *temperature, float *humidity) {
+    uint8_t bits[5] = {0};
+    uint8_t lastState = HIGH;
+    uint8_t counter = 0;
+    uint8_t j = 0, i;
 
-void read_dht22() {
-    int last_state = HIGH;
-    int j = 0;
-
-    data[0] = data[1] = data[2] = data[3] = data[4] = 0;
-
-    // 준비: 신호 시작
+    // 신호 초기화
     pinMode(DHT_PIN, OUTPUT);
     digitalWrite(DHT_PIN, LOW);
-    delay(18);  // 최소 1ms 필요
+    delay(20); // 20ms
     digitalWrite(DHT_PIN, HIGH);
-    delayMicroseconds(40);
-
-    // 센서에서 신호 읽기
+    delayMicroseconds(30);
     pinMode(DHT_PIN, INPUT);
 
-    for (int i = 0; i < MAX_TIMINGS; i++) {
-        int count = 0;
-        while (digitalRead(DHT_PIN) == last_state) {
-            count++;
+    // 응답 신호 읽기
+    for (i = 0; i < 85; i++) {
+        counter = 0;
+        while (digitalRead(DHT_PIN) == lastState) {
+            counter++;
             delayMicroseconds(1);
-            if (count == 255)
-                break;
+            if (counter == 255) break;
         }
 
-        last_state = digitalRead(DHT_PIN);
+        lastState = digitalRead(DHT_PIN);
 
-        if (count == 255)
-            break;
+        if (counter == 255) break;
 
-        // 처음 3개 신호는 무시
+        // 첫 3변화는 무시 (시작 신호)
         if ((i >= 4) && (i % 2 == 0)) {
-            data[j / 8] <<= 1;
-            if (count > 50)
-                data[j / 8] |= 1;
+            bits[j / 8] <<= 1;
+            if (counter > 50)
+                bits[j / 8] |= 1;
             j++;
         }
     }
 
-    // 체크섬 확인
-    if ((j >= 40) &&
-        (data[4] == ((data[0] + data[1] + data[2] + data[3]) & 0xFF))) {
-        float humidity = ((data[0] << 8) + data[1]) * 0.1;
-        float temperature = (((data[2] & 0x7F) << 8) + data[3]) * 0.1;
-        if (data[2] & 0x80) temperature *= -1;
-
-        printf("temp: %.1f°C  humi: %.1f%%\n", temperature, humidity);
-    } else {
-        printf("ERROR!\n");
-    }
-}
-
-int main(void) {
-    printf("DHT22 read (GPIO24)\n");
-
-    if (wiringPiSetup() == -1) {
-        fprintf(stderr, "wiringPi ERROR\n");
-        exit(1);
-    }
-
-    while (1) {
-        read_dht22();
-        delay(2000);  // 2초마다 측정
+    // 총 40비트가 들어와야 함
+    if (j >= 40) {
+        uint8_t checksum = bits[0] + bits[1] + bits[2] + bits[3];
+        if (bits[4] == checksum) {
+            *humidity = ((bits[0] << 8) + bits[1]) * 0.1;
+            *temperature = (((bits[2] & 0x7F) << 8) + bits[3]) * 0.1;
+            if (bits[2] & 0x80) *temperature *= -1;
+            return 1;
+        }
     }
 
     return 0;
 }
 
+int main(void) {
+    float temp = 0.0, hum = 0.0;
+
+    if (wiringPiSetup() == -1) {
+        printf("wiringPi 초기화 실패\n");
+        return 1;
+    }
+
+    while (1) {
+        if (dht22_read(&temp, &hum)) {
+            printf("temp: %.1f°C, humi: %.1f%%\n", temp, hum);
+        } else {
+            printf("ERROR...\n");
+        }
+
+        delay(2000); // 2초마다 갱신
+    }
+
+    return 0;
+}
