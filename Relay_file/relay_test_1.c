@@ -10,7 +10,7 @@ int main(void) {
 
     // wiringPi 초기화
     if (wiringPiSetup() == -1) {
-        printf("wiringPi 초기화 실패!\n");
+        printf("wiringPi initialization fail!\n");
         return 1;
     }
 
@@ -18,21 +18,21 @@ int main(void) {
     digitalWrite(RELAY_PIN, HIGH);  // 릴레이 OFF (HIGH가 OFF인 모듈 기준)
 
     while (1) {
-        printf("센서 값을 입력하세요: ");
+        printf("Input sensor value: ");
         scanf("%d", &value);
 
         if (!relay_on && value >= 50) {
-            printf("릴레이 ON\n");
+            printf("Relay ON\n");
             digitalWrite(RELAY_PIN, LOW);  // 릴레이 ON
             relay_on = 1;
         }
         else if (relay_on && value <= 30) {
-            printf("릴레이 OFF\n");
+            printf("Relay OFF\n");
             digitalWrite(RELAY_PIN, HIGH);  // 릴레이 OFF
             relay_on = 0;
         }
         else {
-            printf("릴레이 상태 유지: %s\n", relay_on ? "ON" : "OFF");
+            printf("Relay on ? : %s\n", relay_on ? "ON" : "OFF");
         }
 
         delay(4000);  // 1초 대기
