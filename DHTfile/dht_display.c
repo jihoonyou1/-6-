@@ -14,7 +14,7 @@ int dht22_read(float *temperature, float *humidity) {
     // 신호 초기화
     pinMode(DHT_PIN, OUTPUT);
     digitalWrite(DHT_PIN, LOW);
-    delay(20); // 20ms
+    delay(2000); // 20ms
     digitalWrite(DHT_PIN, HIGH);
     delayMicroseconds(30);
     pinMode(DHT_PIN, INPUT);
