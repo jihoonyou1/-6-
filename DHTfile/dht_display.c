@@ -35,7 +35,7 @@ int dht22_read(float *temperature, float *humidity) {
         // 첫 3변화는 무시 (시작 신호)
         if ((i >= 4) && (i % 2 == 0)) {
             bits[j / 8] <<= 1;
-            if (counter > 50)
+            if (counter > 30)
                 bits[j / 8] |= 1;
             j++;
         }
