@@ -1,64 +1,70 @@
-#include <wiringPi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <wiringPi.h>
 #include <stdint.h>
 #include <unistd.h>
 
-#define DHTPIN 19
-#define MAX_TIMINGS 85
+#define DHT_PIN 24  // GPIO 핀 번호 설정
 
-int dht_data[5] = {0, 0, 0, 0, 0};
-
-void read_dht22()
-{
-    uint8_t last_state = HIGH;
+void readDHT(int *temperature, int *humidity) {
+    uint8_t data[5] = {0};
+    uint8_t lastState = HIGH;
     uint8_t counter = 0;
     uint8_t j = 0, i;
 
-    dht_data[0] = dht_data[1] = dht_data[2] = dht_data[3] = dht_data[4] = 0;
-
-    pinMode(DHTPIN, OUTPUT);
-    digitalWrite(DHTPIN, LOW);
+    pinMode(DHT_PIN, OUTPUT);
+    digitalWrite(DHT_PIN, LOW);
     usleep(18000);
-    digitalWrite(DHTPIN, HIGH);
+    digitalWrite(DHT_PIN, HIGH);
     usleep(40);
-    pinMode(DHTPIN, INPUT);
+    pinMode(DHT_PIN, INPUT);
 
-    for (i = 0; i < MAX_TIMINGS; i++) {
+    for (i = 0; i < 85; i++) {
         counter = 0;
-        while (digitalRead(DHTPIN) == last_state) {
+        while (digitalRead(DHT_PIN) == lastState) {
             counter++;
-            if (counter == 255) break;
+            if (counter == 255) {
+                break;
+            }
         }
-        last_state = digitalRead(DHTPIN);
+        lastState = digitalRead(DHT_PIN);
+        if (counter == 255) {
+            break;
+        }
 
-        if (counter == 255) break;
-
-        if ((i >= 4) && (i % 2 == 0)) {
-            dht_data[j / 8] <<= 1;
-            if (counter > 50)
-                dht_data[j / 8] |= 1;
+        if ((i >= 3) && (i % 2 == 0)) {
+            data[j / 8] <<= 1;
+            if (counter > 16) {
+                data[j / 8] |= 1;
+            }
             j++;
         }
     }
 
     if ((j >= 40) &&
-        (dht_data[4] == ((dht_data[0] + dht_data[1] + dht_data[2] + dht_data[3]) & 0xFF))) {
-        printf("Temp: %.1f°C Humidity: %.1f%%\n", (float)dht_data[2], (float)dht_data[0]);
+        (data[4] == ((data[0] + data[1] + data[2] + data[3]) & 0xFF))) {
+        *humidity = data[0];
+        *temperature = data[2];
     } else {
-        printf("Sensor error. Retrying...\n");
+        *humidity = -1;
+        *temperature = -1;
     }
 }
 
-int main()
-{
-    if (wiringPiSetupGpio() == -1) {
-        printf("WiringPi initialization failed!\n");
+int main() {
+    if (wiringPiSetup() == -1) {
+        printf("WiringPi setup failed!\n");
         return -1;
     }
 
+    int temperature, humidity;
     while (1) {
-        read_dht22();
+        readDHT(&temperature, &humidity);
+        if (temperature != -1 && humidity != -1) {
+            printf("Temp: %d°C  Humidity: %d%%\n", temperature, humidity);
+        } else {
+            printf("Sensor error, retrying...\n");
+        }
         sleep(2);
     }
 
