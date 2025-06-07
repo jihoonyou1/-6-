@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #define MAX_TIMINGS 85
-#define DHT_PIN 5
+#define DHT_PIN 24
 
 int data[5] = {0, 0, 0, 0, 0};
 
