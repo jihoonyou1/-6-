@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <unistd.h>
 
-#define DHTPIN 24   // GPIO 핀 번호 (BCM 기준)
+#define DHTPIN 19
 #define MAX_TIMINGS 85
 
 int dht_data[5] = {0, 0, 0, 0, 0};
