@@ -1,8 +1,7 @@
 import RPi.GPIO as GPIO
 import time
 
-RELAY_PIN = 17  # BCM 기준 GPIO17 사용
-
+RELAY_PIN = 24  # ext-GPIO0 => GPIO24
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(RELAY_PIN, GPIO.OUT)
 
