@@ -35,7 +35,7 @@ int main(void) {
             printf("릴레이 상태 유지: %s\n", relay_on ? "ON" : "OFF");
         }
 
-        delay(1000);  // 1초 대기
+        delay(4000);  // 1초 대기
     }
 
     return 0;
