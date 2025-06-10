@@ -16,6 +16,10 @@
 
 int data[5] = { 0, 0, 0, 0, 0 };
 
+// 릴레이 상태 전역변수
+int relay1_on = 0;
+int relay2_on = 0;
+
 int write_to_lcd(const char* line1, const char* line2) {
     int dev;
     unsigned char string[MAX_BUFF];
@@ -46,8 +50,6 @@ void read_dht_and_control() {
     uint8_t laststate = HIGH;
     uint8_t counter = 0;
     uint8_t j = 0, i;
-    int relay1_on = 0;
-    int relay2_on = 0;
     data[0] = data[1] = data[2] = data[3] = data[4] = 0;
 
     pinMode(DHT_PIN, OUTPUT);
@@ -111,8 +113,8 @@ void read_dht_and_control() {
         write_to_lcd(line1, line2);
 
     } else {
-        //printf("Data not good, skip\n");
-        //write_to_lcd("Sensor Error", "Retrying...");
+        printf("Sensor error, retrying...\n");
+        write_to_lcd("Sensor Error", "Retrying...");
     }
 }
 
