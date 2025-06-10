@@ -113,8 +113,8 @@ void read_dht_and_control() {
         write_to_lcd(line1, line2);
 
     } else {
-        printf("Sensor error, retrying...\n");
-        write_to_lcd("Sensor Error", "Retrying...");
+        //printf("Sensor error, retrying...\n");
+        //write_to_lcd("Sensor Error", "Retrying...");
     }
 }
 
