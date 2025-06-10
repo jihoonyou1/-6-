@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 #define RELAY1_PIN 5  // GPIO24 (wiringPi 5번)
-#define RELAY2_PIN 6  // GPIO25 (wiringPi 6번)
+#define RELAY2_PIN 25  // GPIO26 (wiringPi 25번)
 
 int main(void) {
     int temperature, humidity;
