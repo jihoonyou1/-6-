@@ -1,8 +1,8 @@
 #include <wiringPi.h>
 #include <stdio.h>
 
-#define RELAY1_PIN  5   // GPIO24 (wiringPi 5번)
-#define RELAY2_PIN  25  // GPIO26 (wiringPi 25번)
+#define RELAY1_PIN  25   // GPIO24 (wiringPi 5번)
+#define RELAY2_PIN  5  // GPIO26 (wiringPi 25번)
 
 void relay_test() {
     printf("Relay Test Start\n");
