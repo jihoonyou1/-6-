@@ -84,18 +84,18 @@ void read_dht_and_control() {
         float f = c * 1.8f + 32;
 
         // Relay control
-        if (!relay1_on && c >= 24) {
+        if (!relay1_on && c >= 27) {
             digitalWrite(RELAY1_PIN, LOW);
             relay1_on = 1;
-        } else if (relay1_on && c <= 18) {
+        } else if (relay1_on && c <= 25) {
             digitalWrite(RELAY1_PIN, HIGH);
             relay1_on = 0;
         }
 
-        if (!relay2_on && h >= 60) {
+        if (!relay2_on && h >= 70) {
             digitalWrite(RELAY2_PIN, LOW);
             relay2_on = 1;
-        } else if (relay2_on && h <= 50) {
+        } else if (relay2_on && h <= 60) {
             digitalWrite(RELAY2_PIN, HIGH);
             relay2_on = 0;
         }
@@ -105,13 +105,14 @@ void read_dht_and_control() {
                c, f, relay1_on ? "ON" : "OFF");
 
         char line1[LINE_BUFF + 1], line2[LINE_BUFF + 1];
-        snprintf(line1, sizeof(line1), "Temp: %.1f C", c, relay1_on ? "ON" : "OFF");
-        snprintf(line2, sizeof(line2), "Humi: %.1f %% / %s", h, relay2_on ? "ON" : "OFF");
+        snprintf(line1, sizeof(line1), "Temp: %.1fC %s", c, relay1_on ? "ON" : "OFF");
+        snprintf(line2, sizeof(line2), "Humi: %.1f%% %s", h, relay2_on ? "ON" : "OFF");
+
         write_to_lcd(line1, line2);
 
     } else {
-        printf("Data not good, skip\n");
-        write_to_lcd("Sensor Error", "Retrying...");
+        //printf("Data not good, skip\n");
+        //write_to_lcd("Sensor Error", "Retrying...");
     }
 }
 
