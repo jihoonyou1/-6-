@@ -94,10 +94,10 @@ void read_dht_and_control() {
             relay1_on = 0;
         }
 
-        if (!relay2_on && h >= 70) {
+        if (!relay2_on && h >= 80) {
             digitalWrite(RELAY2_PIN, LOW);
             relay2_on = 1;
-        } else if (relay2_on && h <= 60) {
+        } else if (relay2_on && h <= 70) {
             digitalWrite(RELAY2_PIN, HIGH);
             relay2_on = 0;
         }
