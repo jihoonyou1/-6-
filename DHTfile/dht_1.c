@@ -7,13 +7,13 @@
 #include <string.h>
 
 #define MAX_TIMINGS 85
-#define DHT_PIN 2
-#define RELAY1_PIN 5
-#define RELAY2_PIN 25
+#define DHT_PIN 2         // WiringPi pin for DHT22
+#define RELAY1_PIN 5      // WiringPi pin for Temperature control relay
+#define RELAY2_PIN 25     // WiringPi pin for Humidity control relay
 
 int data[5] = { 0, 0, 0, 0, 0 };
-int relay1_on = 0;
-int relay2_on = 0;
+int relay1_on = 0; // 0 for OFF (HIGH), 1 for ON (LOW)
+int relay2_on = 0; // 0 for OFF (HIGH), 1 for ON (LOW)
 float threshold_temp;
 int threshold_humi;
 
@@ -24,10 +24,17 @@ void read_dht_and_control() {
     data[0] = data[1] = data[2] = data[3] = data[4] = 0;
 
     pinMode(DHT_PIN, OUTPUT);
+    digitalWrite(DHT_PIN, HIGH);
+    delay(100);
+
+    // Request data from DHT22
     digitalWrite(DHT_PIN, LOW);
-    delay(20);
+    delay(18);
+    digitalWrite(DHT_PIN, HIGH);
+    delayMicroseconds(40);
     pinMode(DHT_PIN, INPUT);
 
+    // Read DHT22 response
     for (i = 0; i < MAX_TIMINGS; i++) {
         counter = 0;
         while (digitalRead(DHT_PIN) == laststate) {
@@ -48,57 +55,63 @@ void read_dht_and_control() {
 
     if ((j >= 40) && (data[4] == ((data[0] + data[1] + data[2] + data[3]) & 0xFF))) {
         float h = (float)((data[0] << 8) + data[1]) / 10;
-        if (h > 100) h = data[0];
+        if (h > 100.0) h = 100.0;
+        if (h < 0.0) h = 0.0;
 
         float c = (float)(((data[2] & 0x7F) << 8) + data[3]) / 10;
-        if (c > 125) c = data[2];
         if (data[2] & 0x80) c = -c;
+        if (c > 125.0) c = 125.0;
+        if (c < -40.0) c = -40.0;
 
-        // 릴레이 제어 (±0.5°C, ±5%)
-        if (!relay1_on && c >= threshold_temp + 0.5) {
-            digitalWrite(RELAY1_PIN, LOW);
+        // Control relays (active-low)
+        if (c >= threshold_temp + 0.5 && !relay1_on) {
+            digitalWrite(RELAY1_PIN, LOW); // ON
             relay1_on = 1;
-        } else if (relay1_on && c <= threshold_temp - 0.5) {
-            digitalWrite(RELAY1_PIN, HIGH);
+        } else if (c <= threshold_temp - 0.5 && relay1_on) {
+            digitalWrite(RELAY1_PIN, HIGH); // OFF
             relay1_on = 0;
         }
 
-        if (!relay2_on && h >= threshold_humi + 5) {
-            digitalWrite(RELAY2_PIN, LOW);
+        if (h >= threshold_humi + 5 && !relay2_on) {
+            digitalWrite(RELAY2_PIN, LOW); // ON
             relay2_on = 1;
-        } else if (relay2_on && h <= threshold_humi - 5) {
-            digitalWrite(RELAY2_PIN, HIGH);
+        } else if (h <= threshold_humi - 5 && relay2_on) {
+            digitalWrite(RELAY2_PIN, HIGH); // OFF
             relay2_on = 0;
         }
-
+        
         printf("Humidity = %.1f %% (Relay: %s) Temperature = %.1f *C (Relay: %s)\n",
                h, relay2_on ? "ON" : "OFF",
                c, relay1_on ? "ON" : "OFF");
+    } else {
+        printf("DHT22 data not ready or checksum error.\n");
     }
 }
 
 int main(int argc, char* argv[]) {
     if (argc != 3) {
-        printf("사용법: %s <TEMP-SET> <HUMI-SET>\n", argv[0]);
+        printf("Usage: %s <TEMP-SET> <HUMI-SET>\n", argv[0]);
         return 1;
     }
 
-    threshold_temp = atof(argv[1]);  // 온도 실수형 값으로 변경
+    threshold_temp = atof(argv[1]);
     threshold_humi = atoi(argv[2]);
 
     printf("DHT22 SENSOR - SET TEMP: %.1f°C, SET HUMI: %d%%\n", threshold_temp, threshold_humi);
 
-    if (wiringPiSetup() == -1)
+    if (wiringPiSetup() == -1) {
+        printf("WiringPi setup failed!\n");
         return 1;
+    }
 
     pinMode(RELAY1_PIN, OUTPUT);
     pinMode(RELAY2_PIN, OUTPUT);
-    digitalWrite(RELAY1_PIN, HIGH);
-    digitalWrite(RELAY2_PIN, HIGH);
+    digitalWrite(RELAY1_PIN, HIGH); // Relays OFF at start
+    digitalWrite(RELAY2_PIN, HIGH); // Relays OFF at start
 
     while (1) {
         read_dht_and_control();
-        delay(4000);
+        delay(2000); // Read and update every 2 seconds
     }
 
     return 0;
