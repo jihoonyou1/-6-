@@ -3,14 +3,14 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
-#include <fcntl.h>
-#include <string.h>
-#include <signal.h> // For signal handling
+#include <fcntl.h>   // For file operations (LCD device)
+#include <string.h>  // For string operations
+#include <signal.h>  // For signal handling
 
 #define MAX_TIMINGS 85
 #define DHT_PIN 2         // WiringPi pin for DHT22 (GPIO27)
-#define RELAY1_PIN 25     // WiringPi pin for Temperature control relay (GPIO24)
-#define RELAY2_PIN 5      // WiringPi pin for Humidity control relay (GPIO26)
+#define RELAY1_PIN 5      // WiringPi pin for Temperature control relay (GPIO26), user's initial file
+#define RELAY2_PIN 25     // WiringPi pin for Humidity control relay (GPIO24), user's initial file
 #define FPGA_TEXT_LCD_DEVICE "/dev/fpga_text_lcd" // FPGA TEXT LCD device path
 #define MAX_BUFF 32       // Total buffer size for LCD (2 lines * 16 chars)
 #define LINE_BUFF 16      // Characters per LCD line
@@ -29,9 +29,7 @@ int threshold_humi;
 // Global variables to hold the last successfully read sensor data
 float last_temp_c = -999.9; // Use an unlikely value to indicate no data yet
 float last_humi = -999.9;
-char last_lcd_line1[LINE_BUFF + 1] = "Waiting for data"; // Initial message for LCD
-char last_lcd_line2[LINE_BUFF + 1] = "Connecting...";    // Initial message for LCD
-
+// Initial messages for LCD will be set in main()
 
 // Function to write two lines to the FPGA TEXT LCD
 // Returns 0 on success, -1 on failure
@@ -40,12 +38,7 @@ int write_to_lcd(const char* line1, const char* line2) {
     unsigned char string[MAX_BUFF];
     memset(string, 0, sizeof(string));
 
-    // Ensure lines fit within LCD buffer (16 chars per line)
-    // This check is mainly for safety, snprintf should handle sizing
-    if (strlen(line1) > LINE_BUFF || strlen(line2) > LINE_BUFF) {
-        return -1; 
-    }
-
+    // Open FPGA TEXT LCD device
     dev = open(FPGA_TEXT_LCD_DEVICE, O_WRONLY);
     if (dev < 0) {
         // perror("Failed to open FPGA text LCD device"); // Uncomment for debugging LCD open failures
@@ -88,7 +81,7 @@ void cleanup_handler(int signum) {
     }
 }
 
-// Function to read DHT22, control relays, and prepare output strings
+// Function to read DHT22, control relays, and print formatted output
 void read_dht_and_control() {
     uint8_t laststate = HIGH;
     uint8_t counter = 0;
@@ -98,7 +91,7 @@ void read_dht_and_control() {
 
     // DHT22 communication sequence
     pinMode(DHT_PIN, OUTPUT);
-    digitalWrite(DHT_PIN, HIGH);
+    digitalWrite(DHT_PIN, HIGH); // Pull high briefly before pull down
     delay(100); // Wait for DHT22 to be ready
     digitalWrite(DHT_PIN, LOW);
     delay(18); // DHT22 requires 18ms low signal
@@ -162,23 +155,36 @@ void read_dht_and_control() {
             relay2_on = 0;
         }
         
-        // Format strings for FPGA TEXT LCD display and update global LCD lines
-        snprintf(last_lcd_line1, sizeof(last_lcd_line1), "Temp:%.1fC %s", last_temp_c, relay1_on ? "ON" : "OFF");
-        snprintf(last_lcd_line2, sizeof(last_lcd_line2), "Humi:%.1f%% %s", last_humi, relay2_on ? "ON" : "OFF");
+        // Print formatted output to standard output for GUI to parse
+        // This line contains all information needed by GUI
+        printf("Humidity = %.1f %% (Relay: %s) Temperature = %.1f *C (Relay: %s)\n",
+               last_humi, relay2_on ? "ON" : "OFF",
+               last_temp_c, relay1_on ? "ON" : "OFF");
+
+        // Format strings for FPGA TEXT LCD display and write to LCD
+        char lcd_line1[LINE_BUFF + 1];
+        char lcd_line2[LINE_BUFF + 1];
+        snprintf(lcd_line1, sizeof(lcd_line1), "Temp:%.1fC %s", last_temp_c, relay1_on ? "ON" : "OFF");
+        snprintf(lcd_line2, sizeof(lcd_line2), "Humi:%.1f%% %s", last_humi, relay2_on ? "ON" : "OFF");
+        write_to_lcd(lcd_line1, lcd_line2);
 
     } else {
-        // Sensor data error. Keep last valid data and continue with last LCD message.
-        // No change to last_temp_c, last_humi. Relay states remain as they were.
-        // last_lcd_line1 and last_lcd_line2 will also remain unchanged from the last successful read.
+        // Sensor data error. Output last valid data to GUI and LCD.
+        // No change to last_temp_c, last_humi. Relay states remain as they were based on previous readings.
+
+        // Print previous formatted output to standard output for GUI to parse
+        printf("Humidity = %.1f %% (Relay: %s) Temperature = %.1f *C (Relay: %s)\n",
+               last_humi, relay2_on ? "ON" : "OFF",
+               last_temp_c, relay1_on ? "ON" : "OFF");
+
+        // Write previous formatted LCD content to FPGA LCD
+        // This will use the values from the last successful read.
+        char lcd_line1[LINE_BUFF + 1];
+        char lcd_line2[LINE_BUFF + 1];
+        snprintf(lcd_line1, sizeof(lcd_line1), "Temp:%.1fC %s", last_temp_c, relay1_on ? "ON" : "OFF");
+        snprintf(lcd_line2, sizeof(lcd_line2), "Humi:%.1f%% %s", last_humi, relay2_on ? "ON" : "OFF");
+        write_to_lcd(lcd_line1, lcd_line2);
     }
-
-    // --- ALWAYS write to FPGA LCD and print to standard output for GUI to mirror ---
-    // This uses the 'last_lcd_lineX' which holds either new valid data or previous valid data.
-    write_to_lcd(last_lcd_line1, last_lcd_line2);
-
-    // Also print these lines to standard output for GUI to parse and mirror
-    printf("FPGA_LCD_L1:%s\n", last_lcd_line1);
-    printf("FPGA_LCD_L2:%s\n", last_lcd_line2);
     fflush(stdout); // Ensure all printf output is flushed immediately
 }
 
@@ -193,11 +199,8 @@ int main(int argc, char* argv[]) {
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <TEMP-SET> <HUMI-SET>\n", argv[0]);
         // Initial LCD messages on usage error, and mirror to stdout
-        snprintf(last_lcd_line1, sizeof(last_lcd_line1), "Usage Error");
-        snprintf(last_lcd_line2, sizeof(last_lcd_line2), "Check console");
-        write_to_lcd(last_lcd_line1, last_lcd_line2);
-        printf("FPGA_LCD_L1:%s\n", last_lcd_line1);
-        printf("FPGA_LCD_L2:%s\n", last_lcd_line2);
+        write_to_lcd("Usage Error", "Check console");
+        printf("Humidity = N/A %% (Relay: N/A) Temperature = N/A *C (Relay: N/A)\n");
         fflush(stdout);
         return 1;
     }
@@ -210,11 +213,8 @@ int main(int argc, char* argv[]) {
     if (wiringPiSetup() == -1) {
         fprintf(stderr, "WiringPi setup failed!\n");
         // Initial LCD messages on WiringPi error, and mirror to stdout
-        snprintf(last_lcd_line1, sizeof(last_lcd_line1), "WiringPi Err");
-        snprintf(last_lcd_line2, sizeof(last_lcd_line2), "Setup Failed");
-        write_to_lcd(last_lcd_line1, last_lcd_line2);
-        printf("FPGA_LCD_L1:%s\n", last_lcd_line1);
-        printf("FPGA_LCD_L2:%s\n", last_lcd_line2);
+        write_to_lcd("WiringPi Err", "Setup Failed");
+        printf("Humidity = N/A %% (Relay: N/A) Temperature = N/A *C (Relay: N/A)\n");
         fflush(stdout);
         return 1;
     }
@@ -226,11 +226,13 @@ int main(int argc, char* argv[]) {
     digitalWrite(RELAY2_PIN, HIGH); 
     
     // Initial LCD messages with settings, and mirror to stdout
-    snprintf(last_lcd_line1, sizeof(last_lcd_line1), "Set T:%.1fC", threshold_temp);
-    snprintf(last_lcd_line2, sizeof(last_lcd_line2), "Set H:%d%%", threshold_humi);
-    write_to_lcd(last_lcd_line1, last_lcd_line2);
-    printf("FPGA_LCD_L1:%s\n", last_lcd_line1);
-    printf("FPGA_LCD_L2:%s\n", last_lcd_line2);
+    char init_lcd_line1[LINE_BUFF + 1];
+    char init_lcd_line2[LINE_BUFF + 1];
+    snprintf(init_lcd_line1, sizeof(init_lcd_line1), "Set T:%.1fC", threshold_temp);
+    snprintf(init_lcd_line2, sizeof(init_lcd_line2), "Set H:%d%%", threshold_humi);
+    write_to_lcd(init_lcd_line1, init_lcd_line2);
+    // Initial data for GUI, before first sensor read
+    printf("Humidity = N/A %% (Relay: N/A) Temperature = N/A *C (Relay: N/A)\n");
     fflush(stdout); 
 
     delay(2000); // Show initial settings for a moment (2 seconds)
@@ -241,5 +243,5 @@ int main(int argc, char* argv[]) {
         delay(4000); // Read and update every 4 seconds
     }
 
-    return 0; // This line is theoretically unreachable due to while(1)
+    return 0; 
 }
