@@ -31,36 +31,38 @@ def start_control():
 def update_sensor_data():
     while True:
         # Execute the C program with thresholds
-        # Note: The C program now handles writing to FPGA_TEXT_LCD directly.
-        # This Python script just receives the print output for its own GUI.
         process = subprocess.run(["./dht_1", str(temp_threshold), str(humi_threshold)], capture_output=True, text=True)
         output = process.stdout.strip()
         
         if output:
             lines = output.split("\n")
-            # The last line printed by dht_1.c should contain the sensor data and relay status.
-            # The C code now also writes to the FPGA LCD, so we parse the last output line for the GUI.
-            if len(lines) > 1:
-                sensor_data_line = lines[-1]
+            
+            # The C program now prints the GUI line, then the two LCD lines.
+            # We need to extract the relevant lines.
+            if len(lines) >= 3: # Expect at least 3 lines: sensor_data_line, LCD_line1, LCD_line2
+                sensor_data_line = lines[-3] # Original sensor and relay status line
+                lcd_line1 = lines[-2].strip() # First line for LCD
+                lcd_line2 = lines[-1].strip() # Second line for LCD
+
                 try:
-                    # Expected format: "Humidity = X.X % (Relay: Y) Temperature = Z.Z *C (Z.Z *F) (Relay: W)"
+                    # Parse the original sensor data and relay status for the status_label
                     parts = sensor_data_line.split(" ")
-                    humidity_value = parts[2]
                     humidity_relay_status = parts[5].replace(")", "")
-                    temperature_value = parts[8]
                     temperature_relay_status = parts[13].replace(")", "") # Updated index due to F value
 
-                    result_label.config(text=f"Humidity: {humidity_value}% Temp: {temperature_value}°C")
                     status_label.config(text=f"TEMP RELAY: {temperature_relay_status}, HUMI RELAY: {humidity_relay_status}")
+                    # Display the exact LCD content in result_label
+                    result_label.config(text=f"{lcd_line1}\n{lcd_line2}")
+
                 except IndexError:
-                    result_label.config(text=f"Error parsing data: {sensor_data_line}")
+                    result_label.config(text=f"Error parsing data: {sensor_data_line}\nCannot read LCD data.")
                     status_label.config(text="STATUS: Data Parse Error")
-            else: # Fallback for initial messages or errors from C program
-                result_label.config(text=lines[-1])
-                status_label.config(text="STATUS: Waiting for sensor data...")
-        else:
-            result_label.config(text="No data from sensor program.")
-            status_label.config(text="STATUS: No Sensor Data")
+            else: # Fallback for initial messages or incomplete output
+                result_label.config(text="\n".join(lines) + "\nWaiting for sensor data...") 
+                status_label.config(text="STATUS: Waiting for full sensor data...")
+        else: # No output from C program (e.g., C program failed or sensor error without output)
+            result_label.config(text="No data from sensor program. Check sensor/C program.")
+            status_label.config(text="STATUS: No Sensor Data or Error")
 
         time.sleep(2)  # Update every 2 seconds
 
@@ -86,7 +88,8 @@ start_button.grid(row=2, columnspan=2, pady=10)
 status_label = tk.Label(root, text="STATUS: Enter values and click START", font=("Arial", 10))
 status_label.grid(row=3, columnspan=2, pady=5)
 
-result_label = tk.Label(root, text="Current Sensor Data: --", font=("Arial", 12, "bold"), fg="blue")
+# result_label to display LCD content
+result_label = tk.Label(root, text="Current Sensor Data: --\n--", font=("Arial", 12, "bold"), fg="blue", justify=tk.LEFT)
 result_label.grid(row=4, columnspan=2, pady=5)
 
 root.mainloop()
