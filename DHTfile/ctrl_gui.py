@@ -87,51 +87,49 @@ def start_control():
         current_humi_label.config(text="SYS ERROR")
 
 
+# ctrl_gui.py 파일
+
+# threading, re, time 등 다른 import 구문들은 그대로 둡니다.
+
 def update_sensor_data():
     global dht_process, last_temp_val, last_humi_val, last_relay1_stat, last_relay2_stat
-    
-    # Regex pattern to parse the C program's output
-    # Example: "Humidity = 55.0 % (Relay: ON) Temperature = 25.1 *C (Relay: OFF)"
+
+    # 이전 단계에서 수정한 강력한 정규식 패턴은 그대로 사용합니다.
     pattern = re.compile(r"Humidity = (N/A|-?\d+\.?\d*)\s*%\s*\(Relay:\s*(ON|OFF|N/A)\)\s*Temperature = (N/A|-?\d+\.?\d*)\s*\*C\s*\(Relay:\s*(ON|OFF|N/A)\)")
 
-    while True:
-        if dht_process and dht_process.poll() is None: # Check if C program is still running
-            line = dht_process.stdout.readline()
-            if line:
-                line = line.strip()
-                match = pattern.match(line)
-                if match:
-                    # Successfully parsed the line
-                    last_humi_val = match.group(1)
-                    last_relay2_stat = match.group(2)
-                    last_temp_val = match.group(3)
-                    last_relay1_stat = match.group(4)
-                # Else: if parsing fails (e.g., "N/A" during startup or error),
-                # last_temp_val etc. retain their previous values.
+    # stdout에서 한 줄씩 실시간으로 읽어오기 위한 안정적인 반복문입니다.
+    # C 프로그램이 종료되어 빈 문자열('')을 보낼 때까지 계속 실행됩니다.
+    for line in iter(dht_process.stdout.readline, ''):
+        line = line.strip()
+        
+        # (디버깅용) C 프로그램에서 어떤 데이터가 넘어오는지 터미널에 출력합니다.
+        print(f"Received from C: '{line}'")
 
-                # Update GUI labels with last valid values
+        if line:
+            match = pattern.match(line)
+            if match:
+                # 성공적으로 파싱한 경우
+                print("DEBUG: Regex match success!") # 디버깅 메시지
+                last_humi_val = match.group(1)
+                last_relay2_stat = match.group(2)
+                last_temp_val = match.group(3)
+                last_relay1_stat = match.group(4)
+
+                # GUI 레이블 업데이트
                 current_temp_label.config(text=f"{last_temp_val}°C")
                 current_humi_label.config(text=f"{last_humi_val}%")
                 relay1_status_label.config(text=f"TEMP RELAY: {last_relay1_stat}")
                 relay2_status_label.config(text=f"HUMI RELAY: {last_relay2_stat}")
-            
-            # Check for any error output from C program's stderr (for debugging)
-            stderr_output = dht_process.stderr.read()
-            if stderr_output:
-                print(f"C Program Stderr: {stderr_output.strip()}")
+            else:
+                # 파싱에 실패한 경우
+                print("DEBUG: Regex match failed.") # 디버깅 메시지
 
-        else: # C program has ended or failed to start
-            current_temp_label.config(text="C Program Ended")
-            current_humi_label.config(text="C Program Ended")
-            relay1_status_label.config(text="TEMP RELAY: Ended")
-            relay2_status_label.config(text="HUMI RELAY: Ended")
-            print("C program process ended. Exiting update thread.")
-            break # Exit the update loop
-
-        # C program updates every 4 seconds, GUI checks every 1 second
-        time.sleep(1) 
-
-
+    # C 프로그램 프로세스가 종료되면 루프가 끝나고 아래 코드가 실행됩니다.
+    print("C program process ended. Exiting update thread.")
+    root.after(100, lambda: current_temp_label.config(text="C Program Ended"))
+    root.after(100, lambda: current_humi_label.config(text="C Program Ended"))
+    root.after(100, lambda: relay1_status_label.config(text="TEMP RELAY: Ended"))
+    root.after(100, lambda: relay2_status_label.config(text="HUMI RELAY: Ended"))
 # GUI window closing event handler
 def on_closing():
     global dht_process
