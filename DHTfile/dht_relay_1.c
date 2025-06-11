@@ -130,9 +130,9 @@ int main(void) {
     digitalWrite(RELAY2_PIN, HIGH);
 
     // 사용자 입력 받기
-    printf("온도 기준값을 입력하세요: ");
+    printf("SET TEMP: ");
     scanf("%d", &threshold_temp);
-    printf("습도 기준값을 입력하세요: ");
+    printf("SET HUMI: ");
     scanf("%d", &threshold_humi);
 
     while (1) {
