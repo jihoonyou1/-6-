@@ -12,11 +12,11 @@ def start_control():
 root = tk.Tk()
 root.title("DHT22 릴레이 제어")
 
-tk.Label(root, text="온도 기준값:").grid(row=0, column=0)
+tk.Label(root, text="SET TEMP:").grid(row=0, column=0)
 temp_entry = tk.Entry(root)
 temp_entry.grid(row=0, column=1)
 
-tk.Label(root, text="습도 기준값:").grid(row=1, column=0)
+tk.Label(root, text="SET HUMI:").grid(row=1, column=0)
 humi_entry = tk.Entry(root)
 humi_entry.grid(row=1, column=1)
 
