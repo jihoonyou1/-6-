@@ -92,7 +92,7 @@ def update_sensor_data():
     
     # Regex pattern to parse the C program's output
     # Example: "Humidity = 55.0 % (Relay: ON) Temperature = 25.1 *C (Relay: OFF)"
-    pattern = re.compile(r"Humidity = (\d+\.?\d*)\s*%\s*\(Relay:\s*(ON|OFF)\)\s*Temperature = (\d+\.?\d*)\s*\*C\s*\(Relay:\s*(ON|OFF)\)")
+    pattern = re.compile(r"Humidity = (N/A|-?\d+\.?\d*)\s*%\s*\(Relay:\s*(ON|OFF|N/A)\)\s*Temperature = (N/A|-?\d+\.?\d*)\s*\*C\s*\(Relay:\s*(ON|OFF|N/A)\)")
 
     while True:
         if dht_process and dht_process.poll() is None: # Check if C program is still running
