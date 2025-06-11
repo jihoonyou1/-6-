@@ -89,19 +89,19 @@ void read_dht_and_control() {
 
         float f = c * 1.8f + 32;
 
-        // 사용자 입력 기준값에 따라 릴레이 제어
-        if (!relay1_on && c >= threshold_temp) {
+        // 사용자 입력 기준값에서 5 이상이면 켜지고, 5 이하이면 꺼짐
+        if (!relay1_on && c >= threshold_temp + 5) {
             digitalWrite(RELAY1_PIN, LOW);
             relay1_on = 1;
-        } else if (relay1_on && c <= threshold_temp - 2) {
+        } else if (relay1_on && c <= threshold_temp - 5) {
             digitalWrite(RELAY1_PIN, HIGH);
             relay1_on = 0;
         }
 
-        if (!relay2_on && h >= threshold_humi) {
+        if (!relay2_on && h >= threshold_humi + 5) {
             digitalWrite(RELAY2_PIN, LOW);
             relay2_on = 1;
-        } else if (relay2_on && h <= threshold_humi - 10) {
+        } else if (relay2_on && h <= threshold_humi - 5) {
             digitalWrite(RELAY2_PIN, HIGH);
             relay2_on = 0;
         }
@@ -115,10 +115,6 @@ void read_dht_and_control() {
         snprintf(line2, sizeof(line2), "Humi: %.1f%% %s", h, relay2_on ? "ON" : "OFF");
 
         write_to_lcd(line1, line2);
-
-    } else {
-        //printf("Sensor error, retrying...\n");
-        //write_to_lcd("Sensor Error", "Retrying...");
     }
 }
 
@@ -134,9 +130,9 @@ int main(void) {
     digitalWrite(RELAY2_PIN, HIGH);
 
     // 사용자 입력 받기
-    printf("SET TEMP: ");
+    printf("온도 기준값을 입력하세요: ");
     scanf("%d", &threshold_temp);
-    printf("SET HUMI: ");
+    printf("습도 기준값을 입력하세요: ");
     scanf("%d", &threshold_humi);
 
     while (1) {
