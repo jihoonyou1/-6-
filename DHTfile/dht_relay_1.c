@@ -8,8 +8,8 @@
 
 #define MAX_TIMINGS     85
 #define DHT_PIN         2       // GPIO27 (wiringPi 2번)
-#define RELAY1_PIN      5       // GPIO24 (wiringPi 5번)
-#define RELAY2_PIN      25      // GPIO26 (wiringPi 25번)
+#define RELAY1_PIN      25       // GPIO24 (wiringPi 25번)
+#define RELAY2_PIN      5      // GPIO26 (wiringPi 5번)
 #define FPGA_TEXT_LCD_DEVICE "/dev/fpga_text_lcd"
 #define MAX_BUFF        32
 #define LINE_BUFF       16
