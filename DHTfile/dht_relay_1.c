@@ -89,11 +89,11 @@ void read_dht_and_control() {
 
         float f = c * 1.8f + 32;
 
-        // 사용자 입력 기준값에서 5 이상이면 켜지고, 5 이하이면 꺼짐
-        if (!relay1_on && c >= threshold_temp + 5) {
+        // 사용자 입력 기준값에서 온도는 0.5, 습도는 5 +-
+        if (!relay1_on && c >= threshold_temp + 0.5) {
             digitalWrite(RELAY1_PIN, LOW);
             relay1_on = 1;
-        } else if (relay1_on && c <= threshold_temp - 5) {
+        } else if (relay1_on && c <= threshold_temp - 0.5) {
             digitalWrite(RELAY1_PIN, HIGH);
             relay1_on = 0;
         }
