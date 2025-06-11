@@ -240,7 +240,7 @@ int main(int argc, char* argv[]) {
     // Main loop for continuous reading and control
     while (1) {
         read_dht_and_control();
-        delay(2000); 
+        delay(4000); 
     }
 
     return 0; 
