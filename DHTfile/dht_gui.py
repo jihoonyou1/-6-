@@ -5,7 +5,7 @@ def start_control():
     temp = temp_entry.get()
     humi = humi_entry.get()
     if temp.isdigit() and humi.isdigit():
-        subprocess.run(["./dht_relay", temp, humi])  # 수정된 C 프로그램 실행
+        subprocess.run(["./dht_relay_1", temp, humi])  # 수정된 C 프로그램 실행
     else:
         result_label.config(text="숫자를 입력하세요!")
 
