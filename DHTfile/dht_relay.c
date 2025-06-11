@@ -6,13 +6,13 @@
 #include <fcntl.h>
 #include <string.h>
 
-#define MAX_TIMINGS     85
-#define DHT_PIN         2       // GPIO27 (wiringPi 2번)
-#define RELAY1_PIN      5       // GPIO24 (wiringPi 5번)
-#define RELAY2_PIN      25      // GPIO26 (wiringPi 25번)
+#define MAX_TIMINGS      85
+#define DHT_PIN          2       // GPIO27 (wiringPi 2번)
+#define RELAY1_PIN       5       // GPIO24 (wiringPi 5번)
+#define RELAY2_PIN       25      // GPIO26 (wiringPi 25번)
 #define FPGA_TEXT_LCD_DEVICE "/dev/fpga_text_lcd"
-#define MAX_BUFF        32
-#define LINE_BUFF       16
+#define MAX_BUFF         32
+#define LINE_BUFF        16
 
 int data[5] = { 0, 0, 0, 0, 0 };
 
@@ -20,27 +20,36 @@ int data[5] = { 0, 0, 0, 0, 0 };
 int relay1_on = 0;
 int relay2_on = 0;
 
+// 사용자 입력 기준값
+int threshold_temp;
+int threshold_humi;
+
 int write_to_lcd(const char* line1, const char* line2) {
     int dev;
     unsigned char string[MAX_BUFF];
     memset(string, 0, sizeof(string));
 
     if (strlen(line1) > LINE_BUFF || strlen(line2) > LINE_BUFF) {
-        printf("Line too long for LCD!\n");
+        // printf("Line too long for LCD!\n"); // GUI 로그에 메시지가 나오므로 여기서는 생략
         return -1;
     }
 
     dev = open(FPGA_TEXT_LCD_DEVICE, O_WRONLY);
     if (dev < 0) {
-        printf("Device open error: %s\n", FPGA_TEXT_LCD_DEVICE);
+        // printf("Device open error: %s\n", FPGA_TEXT_LCD_DEVICE); // GUI 로그에 메시지가 나오므로 여기서는 생략
         return -1;
     }
 
-    strncpy((char*)string, line1, strlen(line1));
-    memset(string + strlen(line1), ' ', LINE_BUFF - strlen(line1));
-    strncpy((char*)string + LINE_BUFF, line2, strlen(line2));
-    memset(string + LINE_BUFF + strlen(line2), ' ', LINE_BUFF - strlen(line2));
-
+    // 버퍼 채우기: C 코드의 원본 로직과 동일하게 동작하도록 복사
+    strncpy((char*)string, line1, LINE_BUFF); // LINE_BUFF까지 복사 (넘치면 잘림)
+    for (int i = strlen(line1); i < LINE_BUFF; i++) { // 나머지 공간 공백으로 채움
+        string[i] = ' ';
+    }
+    strncpy((char*)string + LINE_BUFF, line2, LINE_BUFF); // LINE_BUFF 이후에 line2 복사
+    for (int i = strlen(line2); i < LINE_BUFF; i++) { // 나머지 공간 공백으로 채움
+        string[LINE_BUFF + i] = ' ';
+    }
+    
     write(dev, string, MAX_BUFF);
     close(dev);
     return 0;
@@ -85,20 +94,20 @@ void read_dht_and_control() {
 
         float f = c * 1.8f + 32;
 
-        // Relay control
-        if (!relay1_on && c >= 27) {
-            digitalWrite(RELAY1_PIN, LOW);
+        // 사용자 입력 기준값에 따라 릴레이 제어
+        if (!relay1_on && c >= threshold_temp) {
+            digitalWrite(RELAY1_PIN, LOW); // 릴레이 모듈이 active-low 인 경우 (LOW가 ON)
             relay1_on = 1;
-        } else if (relay1_on && c <= 25) {
-            digitalWrite(RELAY1_PIN, HIGH);
+        } else if (relay1_on && c <= threshold_temp - 2) {
+            digitalWrite(RELAY1_PIN, HIGH); // HIGH가 OFF
             relay1_on = 0;
         }
 
-        if (!relay2_on && h >= 80) {
-            digitalWrite(RELAY2_PIN, LOW);
+        if (!relay2_on && h >= threshold_humi) {
+            digitalWrite(RELAY2_PIN, LOW); // 릴레이 모듈이 active-low 인 경우 (LOW가 ON)
             relay2_on = 1;
-        } else if (relay2_on && h <= 70) {
-            digitalWrite(RELAY2_PIN, HIGH);
+        } else if (relay2_on && h <= threshold_humi - 10) {
+            digitalWrite(RELAY2_PIN, HIGH); // HIGH가 OFF
             relay2_on = 0;
         }
 
@@ -113,25 +122,39 @@ void read_dht_and_control() {
         write_to_lcd(line1, line2);
 
     } else {
-        //printf("Sensor error, retrying...\n");
-        //write_to_lcd("Sensor Error", "Retrying...");
+        // 센서 에러 시에는 표준 출력에 아무것도 내보내지 않으므로, GUI에서는 이전 값을 유지하거나
+        // "N/A" 또는 "Reading Error" 등으로 표시하는 로직이 필요할 수 있습니다.
+        // 현재 Python 코드는 'Humidity = ...' 패턴이 없으면 업데이트하지 않습니다.
     }
 }
 
-int main(void) {
+int main(int argc, char *argv[]) { // main 함수 인자 추가
     printf("DHT22 Sensor & Relay Control Start\n");
 
-    if (wiringPiSetup() == -1)
+    if (wiringPiSetup() == -1) {
+        fprintf(stderr, "wiringPiSetup failed!\n"); // 표준 에러로 출력
         return 1;
+    }
 
     pinMode(RELAY1_PIN, OUTPUT);
     pinMode(RELAY2_PIN, OUTPUT);
-    digitalWrite(RELAY1_PIN, HIGH);
-    digitalWrite(RELAY2_PIN, HIGH);
+    digitalWrite(RELAY1_PIN, HIGH); // 초기 릴레이 OFF
+    digitalWrite(RELAY2_PIN, HIGH); // 초기 릴레이 OFF
+
+    // 명령줄 인자로 임계값 받기
+    if (argc < 3) {
+        fprintf(stderr, "Usage: %s <temperature_threshold> <humidity_threshold>\n", argv[0]);
+        return 1; // 인자 부족 시 에러 종료
+    }
+
+    threshold_temp = atoi(argv[1]);
+    threshold_humi = atoi(argv[2]);
+
+    printf("Set Temperature Threshold: %d C, Set Humidity Threshold: %d %%\n", threshold_temp, threshold_humi);
 
     while (1) {
         read_dht_and_control();
-        delay(4000);
+        delay(4000); // 4초 대기
     }
 
     return 0;
