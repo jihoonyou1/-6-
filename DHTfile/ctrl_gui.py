@@ -1,4 +1,4 @@
--import tkinter as tk
+import tkinter as tk
 import subprocess
 import threading
 import time
@@ -12,8 +12,20 @@ humi_threshold = 0
 # Global variable to hold the C program's subprocess object
 dht_process = None
 
+# Global variables to store the last valid sensor data and relay states
+# This is crucial for displaying "previous results" on sensor error
+last_temp_val = "--"
+last_humi_val = "--"
+last_relay1_stat = "--"
+last_relay2_stat = "--"
+last_fpga_lcd_line1 = "Waiting for data..."
+last_fpga_lcd_line2 = ""
+
+
 def start_control():
-    global temp_threshold, humi_threshold, dht_process
+    global temp_threshold, humi_threshold, dht_process, \
+           last_temp_val, last_humi_val, last_relay1_stat, last_relay2_stat, \
+           last_fpga_lcd_line1, last_fpga_lcd_line2
     
     # Get threshold values from entry fields
     temp_str = temp_entry.get()
@@ -29,11 +41,12 @@ def start_control():
         start_button.config(state='disabled')
         
         # Initial display updates
-        current_temp_label.config(text="Reading...")
-        current_humi_label.config(text="Reading...")
-        relay1_status_label.config(text="TEMP RELAY: Initializing...")
-        relay2_status_label.config(text="HUMI RELAY: Initializing...")
-        fpga_lcd_display_label.config(text="Starting C program...\n")
+        # Display the 'last known' values, which are initial '--' at start
+        current_temp_label.config(text=f"{last_temp_val}°C")
+        current_humi_label.config(text=f"{last_humi_val}%")
+        relay1_status_label.config(text=f"TEMP RELAY: {last_relay1_stat}")
+        relay2_status_label.config(text=f"HUMI RELAY: {last_relay2_stat}")
+        fpga_lcd_display_label.config(text=f"{last_fpga_lcd_line1}\n{last_fpga_lcd_line2}")
 
         # Terminate any existing dht_process before starting a new one
         if dht_process and dht_process.poll() is None:
@@ -80,74 +93,91 @@ def start_control():
 
 
 def update_sensor_data():
-    global dht_process
+    global dht_process, last_temp_val, last_humi_val, last_relay1_stat, last_relay2_stat, \
+           last_fpga_lcd_line1, last_fpga_lcd_line2
+    
     while True:
         if dht_process and dht_process.poll() is None: # Check if C program is still running
             all_lines = []
             # Read multiple lines in a short burst, expecting the 4 lines of output
             # C program outputs every 2 seconds, so we try to read for a bit longer.
             start_read_time = time.time()
-            while time.time() - start_read_time < 2.5: # Timeout for reading a full block
+            # Read up to 4 lines or until a timeout/EOF
+            for _ in range(4): # Expecting 4 lines
                 line = dht_process.stdout.readline()
                 if line:
                     all_lines.append(line.strip())
-                    # Assuming FPGA_LCD_L2 is the last line of a complete data block
-                    if "FPGA_LCD_L2:" in line:
-                        break
-                else: # No new line, give it a tiny moment
-                    time.sleep(0.01) # Small delay to avoid busy-waiting too much
-            
-            # --- Parsing the received lines ---
-            data_line = ""
-            relay_status_line = ""
-            fpga_lcd_line1_content = ""
-            fpga_lcd_line2_content = ""
+                else:
+                    break # EOF or no more lines
 
+            # Attempt to parse
+            temp_parsed = False
+            humi_parsed = False
+            relay_parsed = False
+            lcd1_parsed = False
+            lcd2_parsed = False
+
+            # Initialize temporary variables for current read
+            current_temp = None
+            current_humi = None
+            current_relay1 = None
+            current_relay2 = None
+            current_lcd1 = None
+            current_lcd2 = None
+            
             for line in all_lines:
                 if line.startswith("Temp: ") and "Humi:" in line:
-                    data_line = line
+                    try:
+                        current_temp = line.split("Temp: ")[1].split(" C")[0]
+                        current_humi = line.split("Humi: ")[1].split(" %")[0]
+                        temp_parsed = True
+                        humi_parsed = True
+                    except IndexError:
+                        pass # Parsing error, keep previous values
                 elif line.startswith("R1: ") and "R2:" in line:
-                    relay_status_line = line
+                    try:
+                        current_relay1 = line.split("R1: ")[1].split(",")[0].strip()
+                        current_relay2 = line.split("R2: ")[1].strip()
+                        relay_parsed = True
+                    except IndexError:
+                        pass # Parsing error, keep previous values
                 elif line.startswith("FPGA_LCD_L1: "):
-                    fpga_lcd_line1_content = line.replace("FPGA_LCD_L1: ", "").strip()
+                    current_lcd1 = line.replace("FPGA_LCD_L1: ", "").strip()
+                    lcd1_parsed = True
                 elif line.startswith("FPGA_LCD_L2: "):
-                    fpga_lcd_line2_content = line.replace("FPGA_LCD_L2: ", "").strip()
+                    current_lcd2 = line.replace("FPGA_LCD_L2: ", "").strip()
+                    lcd2_parsed = True
             
-            # Update Current Temp & Humi
-            if data_line:
-                try:
-                    temp_val = data_line.split("Temp: ")[1].split(" C")[0]
-                    humi_val = data_line.split("Humi: ")[1].split(" %")[0]
-                    current_temp_label.config(text=f"{temp_val}°C")
-                    current_humi_label.config(text=f"{humi_val}%")
-                except IndexError:
-                    current_temp_label.config(text="Temp: PARSE ERR")
-                    current_humi_label.config(text="Humi: PARSE ERR")
+            # Update GUI labels only if new data was successfully parsed
+            if temp_parsed:
+                current_temp_label.config(text=f"{current_temp}°C")
+                last_temp_val = current_temp
             else:
-                current_temp_label.config(text="Temp: N/A")
-                current_humi_label.config(text="Humi: N/A")
+                current_temp_label.config(text=f"{last_temp_val}°C") # Display last valid
+            
+            if humi_parsed:
+                current_humi_label.config(text=f"{current_humi}%")
+                last_humi_val = current_humi
+            else:
+                current_humi_label.config(text=f"{last_humi_val}%") # Display last valid
 
-            # Update Relay Status
-            if relay_status_line:
-                try:
-                    relay1_stat = relay_status_line.split("R1: ")[1].split(",")[0].strip()
-                    relay2_stat = relay_status_line.split("R2: ")[1].strip()
-                    relay1_status_label.config(text=f"TEMP RELAY: {relay1_stat}")
-                    relay2_status_label.config(text=f"HUMI RELAY: {relay2_stat}")
-                except IndexError:
-                    relay1_status_label.config(text="TEMP RELAY: PARSE ERR")
-                    relay2_status_label.config(text="HUMI RELAY: PARSE ERR")
+            if relay_parsed:
+                relay1_status_label.config(text=f"TEMP RELAY: {current_relay1}")
+                relay2_status_label.config(text=f"HUMI RELAY: {current_relay2}")
+                last_relay1_stat = current_relay1
+                last_relay2_stat = current_relay2
             else:
-                relay1_status_label.config(text="TEMP RELAY: N/A")
-                relay2_status_label.config(text="HUMI RELAY: N/A")
+                relay1_status_label.config(text=f"TEMP RELAY: {last_relay1_stat}") # Display last valid
+                relay2_status_label.config(text=f"HUMI RELAY: {last_relay2_stat}") # Display last valid
 
-            # Update FPGA LCD display in GUI
-            if fpga_lcd_line1_content and fpga_lcd_line2_content:
-                fpga_lcd_display_label.config(text=f"{fpga_lcd_line1_content}\n{fpga_lcd_line2_content}")
+            if lcd1_parsed and lcd2_parsed:
+                fpga_lcd_display_label.config(text=f"{current_lcd1}\n{current_lcd2}")
+                last_fpga_lcd_line1 = current_lcd1
+                last_fpga_lcd_line2 = current_lcd2
             else:
-                fpga_lcd_display_label.config(text="LCD data not found\nCheck C program output.")
-                
-            # If C program has error output to stderr, print it
+                fpga_lcd_display_label.config(text=f"{last_fpga_lcd_line1}\n{last_fpga_lcd_line2}") # Display last valid
+
+            # Check for any error output from C program
             stderr_output = dht_process.stderr.read()
             if stderr_output:
                 print(f"C Program Stderr: {stderr_output.strip()}")
@@ -168,8 +198,6 @@ def on_closing():
     global dht_process
     if dht_process and dht_process.poll() is None: # Check if C program is still running
         print("GUI closing. Sending SIGINT to dht_1 process group...")
-        # Send SIGINT to the process group of dht_1
-        # This will trigger the cleanup_handler in the C program
         try:
             os.killpg(os.getpgid(dht_process.pid), signal.SIGINT)
             dht_process.wait(timeout=5) # Wait for C program to terminate cleanly
