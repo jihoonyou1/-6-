@@ -21,7 +21,7 @@ int relay1_on = 0; // 0 for OFF (HIGH), 1 for ON (LOW)
 int relay2_on = 0; // 0 for OFF (HIGH), 1 for ON (LOW)
 
 // User input thresholds
-float threshold_temp; // Changed to float to match GUI input and comparison
+float threshold_temp;
 int threshold_humi;
 
 // Function to write two lines to the FPGA TEXT LCD
@@ -32,22 +32,22 @@ int write_to_lcd(const char* line1, const char* line2) {
 
     // Ensure lines fit within LCD buffer
     if (strlen(line1) > LINE_BUFF || strlen(line2) > LINE_BUFF) {
-        printf("Line too long for LCD!\n");
+        printf("ERROR: LCD line too long! (Internal)\n"); 
         return -1;
     }
 
     // Open FPGA TEXT LCD device
     dev = open(FPGA_TEXT_LCD_DEVICE, O_WRONLY);
     if (dev < 0) {
-        printf("Device open error: %s\n", FPGA_TEXT_LCD_DEVICE);
+        // printf("Device open error: %s\n", FPGA_TEXT_LCD_DEVICE); // Commented out error message
         return -1;
     }
 
     // Copy line1, pad with spaces, then copy line2, pad with spaces
-    strncpy((char*)string, line1, strlen(line1));
-    memset(string + strlen(line1), ' ', LINE_BUFF - strlen(line1));
-    strncpy((char*)string + LINE_BUFF, line2, strlen(line2));
-    memset(string + LINE_BUFF + strlen(line2), ' ', LINE_BUFF - strlen(line2));
+    strncpy((char*)string, line1, LINE_BUFF);
+    memset(string + strlen((char*)string), ' ', LINE_BUFF - strlen((char*)string));
+    strncpy((char*)string + LINE_BUFF, line2, LINE_BUFF);
+    memset(string + LINE_BUFF + strlen((char*)string + LINE_BUFF), ' ', LINE_BUFF - strlen((char*)string + LINE_BUFF));
 
     // Write to the device
     write(dev, string, MAX_BUFF);
@@ -125,7 +125,7 @@ void read_dht_and_control() {
             relay2_on = 0;
         }
         
-        // Print to standard output for GUI
+        // Print to standard output for GUI (original sensor/relay status line)
         printf("Humidity = %.1f %% (Relay: %s) Temperature = %.1f *C (%.1f *F) (Relay: %s)\n",
                h, relay2_on ? "ON" : "OFF",
                c, f, relay1_on ? "ON" : "OFF");
@@ -138,10 +138,16 @@ void read_dht_and_control() {
         // Write to FPGA TEXT LCD
         write_to_lcd(line1, line2);
 
+        // Also print LCD lines to standard output for GUI to mirror
+        printf("%s\n", line1);
+        printf("%s\n", line2);
+
     } else {
-        printf("DHT22 data not ready or checksum error.\n");
-        // Optionally, write an error message to LCD
-        write_to_lcd("Sensor Error", "Check DHT22");
+        // DHT22 data not ready or checksum error. No error message printed to console/LCD.
+        // It will just result in no new output from C program for this cycle.
+        // write_to_lcd("Sensor Error", "Check DHT22"); // Commented out
+        // printf("Sensor Error\n"); // Commented out
+        // printf("Check DHT22\n"); // Commented out
     }
 }
 
@@ -149,8 +155,9 @@ int main(int argc, char* argv[]) {
     // Check for correct number of arguments (TEMP and HUMI thresholds)
     if (argc != 3) {
         printf("Usage: %s <TEMP-SET> <HUMI-SET>\n", argv[0]);
-        // Also display usage on LCD if possible
-        write_to_lcd("Usage:", "<TEMP> <HUMI>");
+        // write_to_lcd("Usage:", "<TEMP> <HUMI>"); // Commented out
+        // printf("Usage:\n"); // Commented out
+        // printf("<TEMP> <HUMI>\n"); // Commented out
         return 1;
     }
 
@@ -159,18 +166,25 @@ int main(int argc, char* argv[]) {
     threshold_humi = atoi(argv[2]);
 
     printf("DHT22 SENSOR - SET TEMP: %.1f°C, SET HUMI: %d%%\n", threshold_temp, threshold_humi);
+    
     // Display initial thresholds on LCD
     char lcd_set_line1[LINE_BUFF + 1];
     char lcd_set_line2[LINE_BUFF + 1];
     snprintf(lcd_set_line1, sizeof(lcd_set_line1), "Set T:%.1fC", threshold_temp);
     snprintf(lcd_set_line2, sizeof(lcd_set_line2), "Set H:%d%%", threshold_humi);
     write_to_lcd(lcd_set_line1, lcd_set_line2);
+    // Also print initial settings to standard output for GUI
+    printf("%s\n", lcd_set_line1);
+    printf("%s\n", lcd_set_line2);
+    
     delay(2000); // Show initial settings for a moment
 
     // Initialize WiringPi
     if (wiringPiSetup() == -1) {
         printf("WiringPi setup failed!\n");
-        write_to_lcd("WiringPi", "Setup Failed");
+        // write_to_lcd("WiringPi", "Setup Failed"); // Commented out
+        // printf("WiringPi\n"); // Commented out
+        // printf("Setup Failed\n"); // Commented out
         return 1;
     }
 
@@ -183,7 +197,7 @@ int main(int argc, char* argv[]) {
     // Main loop for continuous reading and control
     while (1) {
         read_dht_and_control();
-        delay(2000); // Read and update every 2 seconds (was 4000)
+        delay(2000); // Read and update every 2 seconds
     }
 
     return 0;
