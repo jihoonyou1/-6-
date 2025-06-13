@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define RELAY_A_PIN 1 // WiringPi pin for Relay A
-#define RELAY_B_PIN 2 // WiringPi pin for Relay B
+#define RELAY_A_PIN 5 // WiringPi pin for Relay A
+#define RELAY_B_PIN 25 // WiringPi pin for Relay B
 
 int main(void) {
     if (wiringPiSetup() == -1) {
