@@ -8,7 +8,7 @@
 #include <signal.h>  // For signal handling
 
 #define MAX_TIMINGS 85
-#define DHT_PIN 2         // WiringPi pin for DHT22 (GPIO27)
+#define DHT_PIN 5       // WiringPi pin for DHT22 (GPIO27)
 #define FPGA_TEXT_LCD_DEVICE "/dev/fpga_text_lcd" // FPGA TEXT LCD device path
 #define FPGA_LED_DEVICE "/dev/fpga_led" // FPGA LED device path
 #define MAX_BUFF 32       // Total buffer size for LCD (2 lines * 16 chars)
