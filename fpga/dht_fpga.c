@@ -8,7 +8,7 @@
 #include <signal.h>  // For signal handling
 
 #define MAX_TIMINGS 85
-#define DHT_PIN 5       // WiringPi pin for DHT22 (GPIO27)
+#define DHT_PIN 5        // WiringPi pin for DHT22 (GPIO27) - 이 값은 실제 연결된 핀 번호로 확인해주세요.
 #define FPGA_TEXT_LCD_DEVICE "/dev/fpga_text_lcd" // FPGA TEXT LCD device path
 #define FPGA_LED_DEVICE "/dev/fpga_led" // FPGA LED device path
 #define MAX_BUFF 32       // Total buffer size for LCD (2 lines * 16 chars)
@@ -120,7 +120,9 @@ void read_dht_and_control() {
         }
     }
 
-    unsigned char new_led_state = 0; // Calculate new LED state
+    // 각 LED 그룹의 상태를 개별적으로 계산할 임시 변수
+    unsigned char temp_led_segment = 0; // D1-D4 (하위 4비트)
+    unsigned char humi_led_segment = 0; // D5-D8 (상위 4비트)
 
     if (j >= 40 && (data[4] == ((data[0] + data[1] + data[2] + data[3]) & 0xFF))) {
         float h = (float)((data[0] << 8) + data[1]) / 10;
@@ -135,33 +137,34 @@ void read_dht_and_control() {
         last_temp_c = c;
         last_humi = h;
 
-        // Temperature LEDs (D1-D4: bits 0-3)
+        // Temperature LEDs (D1-D4: bits 0-3) - 0x0F 마스크 사용
         if (c >= threshold_temp + 0.5) {
-            new_led_state |= 0x0F; // Turn ON D1-D4 (0000 1111)
+            temp_led_segment = 0x0F; // D1-D4 켜기
         } else if (c <= threshold_temp - 0.5) {
-            new_led_state &= ~0x0F; // Turn OFF D1-D4
+            temp_led_segment = 0x00; // D1-D4 끄기
         } else {
-            // Keep current D1-D4 state if within hysteresis
-            new_led_state |= (current_led_state & 0x0F);
+            // 현재 온도 LED 상태를 유지 (current_led_state에서 하위 4비트만 가져옴)
+            temp_led_segment = (current_led_state & 0x0F); 
         }
 
-        // Humidity LEDs (D5-D8: bits 4-7)
+        // Humidity LEDs (D5-D8: bits 4-7) - 0xF0 마스크 사용
         if (h >= threshold_humi + 5) {
-            new_led_state |= 0xF0; // D5-D8을 켜기 위해 0x0F 대신 0xF0 사용
+            humi_led_segment = 0xF0; // D5-D8 켜기
         } else if (h <= threshold_humi - 5) {
-            new_led_state &= ~0xF0; // D5-D8을 끄기 위해 0x0F 대신 0xF0 사용
+            humi_led_segment = 0x00; // D5-D8 끄기
         } else {
-            // Keep current D5-D8 state if within hysteresis
-            new_led_state |= (current_led_state & 0xF0);
+            // 현재 습도 LED 상태를 유지 (current_led_state에서 상위 4비트만 가져옴)
+            humi_led_segment = (current_led_state & 0xF0); 
         }
         
-        current_led_state = new_led_state;
+        // 최종 LED 상태는 두 세그먼트의 합
+        current_led_state = temp_led_segment | humi_led_segment;
 
         write_to_fpga_led(current_led_state);
 
         printf("Humidity = %.1f %% (LED: %s) Temperature = %.1f *C (LED: %s)\n",
-               last_humi, (current_led_state & 0xF0) ? "ON" : "OFF", // 습도 LED 상태 확인 0xF0
-               last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF"); // 온도 LED 상태 확인 0x0F
+               last_humi, (current_led_state & 0xF0) ? "ON" : "OFF", // HUMI LED는 상위 4비트 (0xF0)
+               last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF"); // TEMP LED는 하위 4비트 (0x0F)
 
         char lcd_line1[LINE_BUFF + 1];
         char lcd_line2[LINE_BUFF + 1];
@@ -170,7 +173,7 @@ void read_dht_and_control() {
         write_to_lcd(lcd_line1, lcd_line2);
 
     } else {
-        // If DHT22 read fails, use last successful values and current LED state
+        // 데이터 읽기 실패 시, 마지막 유효 데이터와 LED 상태를 계속 표시
         printf("Humidity = %.1f %% (LED: %s) Temperature = %.1f *C (LED: %s)\n",
                last_humi, (current_led_state & 0xF0) ? "ON" : "OFF",
                last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF");
