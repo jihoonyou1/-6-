@@ -8,7 +8,7 @@
 #include <signal.h>  // For signal handling
 
 #define MAX_TIMINGS 85
-#define DHT_PIN 5         // WiringPi pin for DHT22 (GPIO27)
+#define DHT_PIN 2         // WiringPi pin for DHT22 (GPIO27)
 #define FPGA_TEXT_LCD_DEVICE "/dev/fpga_text_lcd" // FPGA TEXT LCD device path
 #define FPGA_LED_DEVICE "/dev/fpga_led" // FPGA LED device path
 #define MAX_BUFF 32       // Total buffer size for LCD (2 lines * 16 chars)
@@ -141,15 +141,17 @@ void read_dht_and_control() {
         } else if (c <= threshold_temp - 0.5) {
             new_led_state &= ~0x0F; // Turn OFF D1-D4
         } else {
+            // Keep current D1-D4 state if within hysteresis
             new_led_state |= (current_led_state & 0x0F);
         }
 
         // Humidity LEDs (D5-D8: bits 4-7)
         if (h >= threshold_humi + 5) {
-            new_led_state |= 0xF0; // Turn ON D5-D8 (1111 0000)
+            new_led_state |= 0xF0; // D5-D8을 켜기 위해 0x0F 대신 0xF0 사용
         } else if (h <= threshold_humi - 5) {
-            new_led_state &= ~0xF0; // Turn OFF D5-D8
+            new_led_state &= ~0xF0; // D5-D8을 끄기 위해 0x0F 대신 0xF0 사용
         } else {
+            // Keep current D5-D8 state if within hysteresis
             new_led_state |= (current_led_state & 0xF0);
         }
         
@@ -158,8 +160,8 @@ void read_dht_and_control() {
         write_to_fpga_led(current_led_state);
 
         printf("Humidity = %.1f %% (LED: %s) Temperature = %.1f *C (LED: %s)\n",
-               last_humi, (current_led_state & 0xF0) ? "ON" : "OFF",
-               last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF");
+               last_humi, (current_led_state & 0xF0) ? "ON" : "OFF", // 습도 LED 상태 확인 0xF0
+               last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF"); // 온도 LED 상태 확인 0x0F
 
         char lcd_line1[LINE_BUFF + 1];
         char lcd_line2[LINE_BUFF + 1];
@@ -168,6 +170,7 @@ void read_dht_and_control() {
         write_to_lcd(lcd_line1, lcd_line2);
 
     } else {
+        // If DHT22 read fails, use last successful values and current LED state
         printf("Humidity = %.1f %% (LED: %s) Temperature = %.1f *C (LED: %s)\n",
                last_humi, (current_led_state & 0xF0) ? "ON" : "OFF",
                last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF");
