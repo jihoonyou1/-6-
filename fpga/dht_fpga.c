@@ -8,7 +8,7 @@
 #include <signal.h>  // For signal handling
 
 #define MAX_TIMINGS 85
-#define DHT_PIN 5        // WiringPi pin for DHT22 (GPIO27) - 이 값은 실제 연결된 핀 번호로 확인해주세요.
+#define DHT_PIN 2         // WiringPi pin for DHT22 (GPIO27) - 이 값은 실제 연결된 핀 번호로 확인해주세요.
 #define FPGA_TEXT_LCD_DEVICE "/dev/fpga_text_lcd" // FPGA TEXT LCD device path
 #define FPGA_LED_DEVICE "/dev/fpga_led" // FPGA LED device path
 #define MAX_BUFF 32       // Total buffer size for LCD (2 lines * 16 chars)
@@ -137,24 +137,24 @@ void read_dht_and_control() {
         last_temp_c = c;
         last_humi = h;
 
-        // Temperature LEDs (D1-D4: bits 0-3) - 0x0F 마스크 사용
+        // ******** 수정된 부분: TEMP LED (D1-D4) 제어에 0xF0 마스크 사용 ********
         if (c >= threshold_temp + 0.5) {
-            temp_led_segment = 0x0F; // D1-D4 켜기
+            temp_led_segment = 0xF0; // D1-D4 켜기 (FPGA 비트 매핑이 반대라고 가정)
         } else if (c <= threshold_temp - 0.5) {
             temp_led_segment = 0x00; // D1-D4 끄기
         } else {
-            // 현재 온도 LED 상태를 유지 (current_led_state에서 하위 4비트만 가져옴)
-            temp_led_segment = (current_led_state & 0x0F); 
+            // 현재 온도 LED 상태를 유지 (current_led_state에서 상위 4비트만 가져와서 TEMP LED로 사용)
+            temp_led_segment = (current_led_state & 0xF0); 
         }
 
-        // Humidity LEDs (D5-D8: bits 4-7) - 0xF0 마스크 사용
+        // ******** 수정된 부분: HUMI LED (D5-D8) 제어에 0x0F 마스크 사용 ********
         if (h >= threshold_humi + 5) {
-            humi_led_segment = 0xF0; // D5-D8 켜기
+            humi_led_segment = 0x0F; // D5-D8 켜기 (FPGA 비트 매핑이 반대라고 가정)
         } else if (h <= threshold_humi - 5) {
             humi_led_segment = 0x00; // D5-D8 끄기
         } else {
-            // 현재 습도 LED 상태를 유지 (current_led_state에서 상위 4비트만 가져옴)
-            humi_led_segment = (current_led_state & 0xF0); 
+            // 현재 습도 LED 상태를 유지 (current_led_state에서 하위 4비트만 가져와서 HUMI LED로 사용)
+            humi_led_segment = (current_led_state & 0x0F); 
         }
         
         // 최종 LED 상태는 두 세그먼트의 합
@@ -162,26 +162,27 @@ void read_dht_and_control() {
 
         write_to_fpga_led(current_led_state);
 
+        // printf 출력 및 LCD 출력도 마스크에 맞게 변경 (하위 비트는 HUMI, 상위 비트는 TEMP로 출력)
         printf("Humidity = %.1f %% (LED: %s) Temperature = %.1f *C (LED: %s)\n",
-               last_humi, (current_led_state & 0xF0) ? "ON" : "OFF", // HUMI LED는 상위 4비트 (0xF0)
-               last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF"); // TEMP LED는 하위 4비트 (0x0F)
+               last_humi, (current_led_state & 0x0F) ? "ON" : "OFF", // HUMI LED는 이제 0x0F로 확인
+               last_temp_c, (current_led_state & 0xF0) ? "ON" : "OFF"); // TEMP LED는 이제 0xF0으로 확인
 
         char lcd_line1[LINE_BUFF + 1];
         char lcd_line2[LINE_BUFF + 1];
-        snprintf(lcd_line1, sizeof(lcd_line1), "Temp:%.1fC %s", last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF");
-        snprintf(lcd_line2, sizeof(lcd_line2), "Humi:%.1f%% %s", last_humi, (current_led_state & 0xF0) ? "ON" : "OFF");
+        snprintf(lcd_line1, sizeof(lcd_line1), "Temp:%.1fC %s", last_temp_c, (current_led_state & 0xF0) ? "ON" : "OFF");
+        snprintf(lcd_line2, sizeof(lcd_line2), "Humi:%.1f%% %s", last_humi, (current_led_state & 0x0F) ? "ON" : "OFF");
         write_to_lcd(lcd_line1, lcd_line2);
 
     } else {
         // 데이터 읽기 실패 시, 마지막 유효 데이터와 LED 상태를 계속 표시
         printf("Humidity = %.1f %% (LED: %s) Temperature = %.1f *C (LED: %s)\n",
-               last_humi, (current_led_state & 0xF0) ? "ON" : "OFF",
-               last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF");
+               last_humi, (current_led_state & 0x0F) ? "ON" : "OFF",
+               last_temp_c, (current_led_state & 0xF0) ? "ON" : "OFF");
 
         char lcd_line1[LINE_BUFF + 1];
         char lcd_line2[LINE_BUFF + 1];
-        snprintf(lcd_line1, sizeof(lcd_line1), "Temp:%.1fC %s", last_temp_c, (current_led_state & 0x0F) ? "ON" : "OFF");
-        snprintf(lcd_line2, sizeof(lcd_line2), "Humi:%.1f%% %s", last_humi, (current_led_state & 0xF0) ? "ON" : "OFF");
+        snprintf(lcd_line1, sizeof(lcd_line1), "Temp:%.1fC %s", last_temp_c, (current_led_state & 0xF0) ? "ON" : "OFF");
+        snprintf(lcd_line2, sizeof(lcd_line2), "Humi:%.1f%% %s", last_humi, (current_led_state & 0x0F) ? "ON" : "OFF");
         write_to_lcd(lcd_line1, lcd_line2);
     }
     fflush(stdout);
