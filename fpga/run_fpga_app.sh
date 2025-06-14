@@ -20,4 +20,4 @@ gcc -o dht_fpga dht_fpga.c -lwiringPi -lrt -lpthread
 chmod +x dht_fpga
 
 #4. LAUNCH
-pyhon3 gui_fpga.py
+python3 gui_fpga.py
