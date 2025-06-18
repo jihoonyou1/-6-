@@ -3,6 +3,7 @@ import signal
 import subprocess
 import threading
 import time
+import re # 추가
 from flask import Flask, render_template, jsonify, request
 
 app = Flask(__name__)
@@ -19,22 +20,53 @@ current_temp_threshold = 25.0
 current_humi_threshold = 60
 process_output_buffer = [] # C 프로그램 로그를 저장할 버퍼
 
+# --- 시그널 핸들러 함수 ---
+def signal_handler(sig, frame):
+    print(f"\nReceived signal {sig}. Initiating graceful shutdown...")
+    stop_dht_process_gracefully()
+    # Flask 앱 자체를 종료하려면 sys.exit()를 호출하거나,
+    # 이 함수가 리턴되면 웹 서버가 자연스럽게 종료되도록 합니다.
+    # Werkzeug 개발 서버는 SIGINT를 받으면 자동으로 종료됩니다.
+    os._exit(0) # 즉시 종료 (정리 후)
+
+def stop_dht_process_gracefully():
+    global dht_process
+    if dht_process and dht_process.poll() is None:
+        print("Terminating dht_fpga process gracefully...")
+        try:
+            # C 코드의 SIGINT 핸들러를 사용하도록 SIGINT를 보냅니다.
+            # os.killpg는 프로세스 그룹 전체에 시그널을 보냅니다.
+            os.killpg(os.getpgid(dht_process.pid), signal.SIGINT)
+            dht_process.wait(timeout=5) # 최대 5초 대기
+            print("dht_fpga process terminated.")
+        except ProcessLookupError:
+            print("dht_fpga process already terminated or not found.")
+        except subprocess.TimeoutExpired:
+            print("dht_fpga did not terminate gracefully. Forcing kill.")
+            os.killpg(os.getpgid(dht_process.pid), signal.SIGKILL)
+            dht_process.wait(timeout=1)
+        except Exception as e:
+            print(f"Error during dht_fpga termination: {e}")
+        dht_process = None
+        # 프로세스 종료 후 센서 상태 초기화
+        last_sensor_data = {
+            "temp_val": "Stopped",
+            "humi_val": "Stopped",
+            "temp_led_status": "OFF",
+            "humi_led_status": "OFF"
+        }
+        process_output_buffer.append("dht_fpga process stopped by server.")
+
+
 # --- C 프로그램 실행 및 로그 읽기 스레드 ---
 def run_dht_program(temp_threshold, humi_threshold):
     global dht_process, last_sensor_data, process_output_buffer
 
     # 기존 프로세스 종료
     if dht_process and dht_process.poll() is None:
-        print("Terminating existing dht_fpga process...")
-        try:
-            os.killpg(os.getpgid(dht_process.pid), signal.SIGTERM)
-            dht_process.wait(timeout=2)
-        except ProcessLookupError:
-            pass
-        if dht_process.poll() is None:
-            os.killpg(os.getpgid(dht_process.pid), signal.SIGKILL)
-            dht_process.wait(timeout=1)
-        dht_process = None
+        print("Terminating existing dht_fpga process for restart...")
+        stop_dht_process_gracefully() # 기존 프로세스를 우아하게 종료
+        time.sleep(1) # 종료될 시간을 줌
 
     process_output_buffer.clear() # 버퍼 초기화
     last_sensor_data = { # 센서 데이터 초기화
@@ -51,9 +83,10 @@ def run_dht_program(temp_threshold, humi_threshold):
             stderr=subprocess.STDOUT, # 에러도 stdout으로 리다이렉트하여 함께 읽기
             text=True,
             bufsize=1,
-            preexec_fn=os.setsid
+            preexec_fn=os.setsid # 자식 프로세스 그룹을 생성하여 SIGINT가 이 그룹에만 전달되도록 함
         )
         print(f"Started dht_fpga with PID: {dht_process.pid}, PGID: {os.getpgid(dht_process.pid)}")
+        process_output_buffer.append(f"dht_fpga started with T:{temp_threshold} H:{humi_threshold}")
 
         # C 프로그램의 출력을 읽고 파싱하는 루프
         for line in iter(dht_process.stdout.readline, ''):
@@ -89,9 +122,12 @@ def run_dht_program(temp_threshold, humi_threshold):
             "temp_led_status": "Ended",
             "humi_led_status": "Ended"
         }
+        process_output_buffer.append("dht_fpga process stopped naturally.")
+
 
     except FileNotFoundError:
         print("Error: dht_fpga executable not found. Make sure it's compiled and in the same directory.")
+        process_output_buffer.append("Error: dht_fpga executable not found!")
         last_sensor_data = {
             "temp_val": "File Error",
             "humi_val": "File Error",
@@ -100,12 +136,15 @@ def run_dht_program(temp_threshold, humi_threshold):
         }
     except Exception as e:
         print(f"An unexpected error occurred in run_dht_program: {e}")
+        process_output_buffer.append(f"Runtime Error: {e}")
         last_sensor_data = {
             "temp_val": "System Error",
             "humi_val": "System Error",
             "temp_led_status": "N/A",
             "humi_led_status": "N/A"
         }
+    finally:
+        dht_process = None # 확실히 None으로 설정
 
 # --- 웹 라우트 ---
 
@@ -147,37 +186,15 @@ def get_program_logs():
 
 @app.route('/stop_control', methods=['POST'])
 def stop_control():
-    global dht_process
-    if dht_process and dht_process.poll() is None:
-        print("Stopping dht_fpga process...")
-        try:
-            os.killpg(os.getpgid(dht_process.pid), signal.SIGINT) # C 코드의 SIGINT 핸들러 활용
-            dht_process.wait(timeout=5)
-            # C 프로그램이 종료된 후 FPGA LED를 끄도록 가정
-            # 실제로는 C 프로그램의 cleanup_handler에서 처리될 것입니다.
-            return jsonify({"status": "success", "message": "Control stopped."})
-        except ProcessLookupError:
-            return jsonify({"status": "success", "message": "dht_fpga process already terminated."})
-        except Exception as e:
-            return jsonify({"status": "error", "message": f"Error stopping control: {e}"})
-    return jsonify({"status": "info", "message": "No active dht_fpga process to stop."})
+    stop_dht_process_gracefully()
+    return jsonify({"status": "success", "message": "Control stop requested. Check logs for status."})
 
-# 애플리케이션 종료 시 정리
-@app.before_server_stop
-def cleanup_on_shutdown():
-    global dht_process
-    if dht_process and dht_process.poll() is None:
-        print("Server shutting down. Terminating dht_fpga process...")
-        try:
-            os.killpg(os.getpgid(dht_process.pid), signal.SIGINT)
-            dht_process.wait(timeout=5)
-        except ProcessLookupError:
-            pass
-        except Exception as e:
-            print(f"Error during shutdown cleanup: {e}")
 
 if __name__ == '__main__':
-    import re # 전역 변수 선언 문제로 임시로 여기에 re 추가. 실제로는 상단에 있어야 함.
-    # GUI 스크립트가 이미 C 프로그램을 실행하므로, 여기서는 Flask만 실행
+    # SIGINT (Ctrl+C) 및 SIGTERM 시그널 핸들러 등록
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     # 로컬 네트워크의 모든 인터페이스에서 접근 가능하도록 host='0.0.0.0' 설정
-    app.run(host='0.0.0.0', port=5000, debug=False) # 디버그 모드는 개발 중에만 사용하고 배포 시에는 False
+    # 개발 중에만 debug=True를 사용하고, 프로덕션에서는 False로 설정해야 합니다.
+    app.run(host='0.0.0.0', port=5000, debug=False)
