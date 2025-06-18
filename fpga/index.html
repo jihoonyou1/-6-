@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DHT22 & FPGA LED 웹 컨트롤</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        .section { margin-bottom: 20px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; background-color: #f9f9f9; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="number"] { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; margin-right: 10px; }
+        button:hover { background-color: #0056b3; }
+        button#stopButton { background-color: #dc3545; }
+        button#stopButton:hover { background-color: #c82333; }
+        .status-box { display: flex; justify-content: space-around; margin-top: 15px; }
+        .status-item { flex: 1; text-align: center; padding: 10px; margin: 0 5px; border: 1px solid #eee; border-radius: 5px; background-color: #fff; }
+        .status-value { font-size: 1.5em; font-weight: bold; color: #28a745; }
+        .led-status { font-size: 0.9em; color: #6c757d; }
+        #logs-output {
+            background-color: #333;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 5px;
+            height: 200px;
+            overflow-y: scroll;
+            white-space: pre-wrap; /* 줄바꿈 유지 */
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+        .log-line { border-bottom: 1px solid #555; padding-bottom: 2px; margin-bottom: 2px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DHT22 & FPGA LED 웹 컨트롤</h1>
+
+        <div class="section">
+            <h2>설정 및 시작</h2>
+            <form id="controlForm">
+                <label for="tempThreshold">온도 설정 (°C):</label>
+                <input type="number" id="tempThreshold" name="temp_set" step="0.1" value="{{ temp_threshold }}" required>
+
+                <label for="humiThreshold">습도 설정 (%):</label>
+                <input type="number" id="humiThreshold" name="humi_set" value="{{ humi_threshold }}" required>
+
+                <button type="submit" id="startButton">컨트롤 시작</button>
+                <button type="button" id="stopButton">컨트롤 중지</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>현재 센서 데이터</h2>
+            <div class="status-box">
+                <div class="status-item">
+                    <p>현재 온도:</p>
+                    <p id="currentTemp" class="status-value">--°C</p>
+                    <p class="led-status">TEMP LED (D1-D4): <span id="tempLedStatus">--</span></p>
+                </div>
+                <div class="status-item">
+                    <p>현재 습도:</p>
+                    <p id="currentHumi" class="status-value">--%</p>
+                    <p class="led-status">HUMI LED (D5-D8): <span id="humiLedStatus">--</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>프로그램 로그</h2>
+            <pre id="logs-output"></pre>
+        </div>
+    </div>
+
+    <script>
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const controlForm = document.getElementById('controlForm');
+        const currentTempSpan = document.getElementById('currentTemp');
+        const currentHumiSpan = document.getElementById('currentHumi');
+        const tempLedStatusSpan = document.getElementById('tempLedStatus');
+        const humiLedStatusSpan = document.getElementById('humiLedStatus');
+        const logsOutput = document.getElementById('logs-output');
+
+        let updateInterval;
+        let logUpdateInterval;
+
+        // 센서 데이터 업데이트 함수
+        function updateSensorData() {
+            fetch('/get_sensor_data')
+                .then(response => response.json())
+                .then(data => {
+                    currentTempSpan.textContent = `${data.temp_val}°C`;
+                    currentHumiSpan.textContent = `${data.humi_val}%`;
+                    tempLedStatusSpan.textContent = data.temp_led_status;
+                    humiLedStatusSpan.textContent = data.humi_led_status;
+                })
+                .catch(error => console.error('Error fetching sensor data:', error));
+        }
+
+        // 프로그램 로그 업데이트 함수
+        function updateProgramLogs() {
+            fetch('/get_program_logs')
+                .then(response => response.json())
+                .then(data => {
+                    logsOutput.innerHTML = ''; // 기존 로그 지우기
+                    data.logs.forEach(log => {
+                        const logLine = document.createElement('div');
+                        logLine.className = 'log-line';
+                        logLine.textContent = log;
+                        logsOutput.appendChild(logLine);
+                    });
+                    // 스크롤을 항상 아래로 유지 (최신 로그 보기 위함)
+                    logsOutput.scrollTop = logsOutput.scrollHeight;
+                })
+                .catch(error => console.error('Error fetching logs:', error));
+        }
+
+        // 폼 제출 시 (시작 버튼 클릭)
+        controlForm.addEventListener('submit', function(event) {
+            event.preventDefault(); // 기본 폼 제출 방지
+
+            const formData = new FormData(controlForm);
+            fetch('/start_control', {
+                method: 'POST',
+                body: new URLSearchParams(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('컨트롤이 시작되었습니다.');
+                    // 일정 간격으로 센서 데이터 및 로그 업데이트 시작
+                    if (updateInterval) clearInterval(updateInterval);
+                    updateInterval = setInterval(updateSensorData, 2000); // 2초마다 센서 데이터 업데이트
+                    if (logUpdateInterval) clearInterval(logUpdateInterval);
+                    logUpdateInterval = setInterval(updateProgramLogs, 1000); // 1초마다 로그 업데이트
+                    updateSensorData(); // 즉시 한 번 업데이트
+                    updateProgramLogs(); // 즉시 한 번 업데이트
+                    startButton.disabled = true;
+                    stopButton.disabled = false;
+                } else {
+                    alert('컨트롤 시작 실패: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error starting control:', error);
+                alert('컨트롤 시작 중 오류가 발생했습니다.');
+            });
+        });
+
+        // 중지 버튼 클릭 시
+        stopButton.addEventListener('click', function() {
+            fetch('/stop_control', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                if (data.status === 'success' || data.status === 'info') {
+                    if (updateInterval) clearInterval(updateInterval);
+                    if (logUpdateInterval) clearInterval(logUpdateInterval);
+                    startButton.disabled = false;
+                    stopButton.disabled = true;
+                    // 상태 초기화 또는 마지막 값 유지
+                    currentTempSpan.textContent = "--°C";
+                    currentHumiSpan.textContent = "--%";
+                    tempLedStatusSpan.textContent = "--";
+                    humiLedStatusSpan.textContent = "--";
+                }
+            })
+            .catch(error => {
+                console.error('Error stopping control:', error);
+                alert('컨트롤 중지 중 오류가 발생했습니다.');
+            });
+        });
+
+        // 페이지 로드 시 초기 상태 설정
+        window.onload = function() {
+            stopButton.disabled = true; // 처음에는 중지 버튼 비활성화
+            // 필요하다면, 페이지 로드 시 C 프로그램이 이미 실행 중인지 확인하고 상태를 업데이트할 수 있습니다.
+            // (이 예제에서는 Flask 서버 시작 시 C 프로그램이 자동으로 시작되지 않음)
+            updateSensorData(); // 초기 데이터 로드 (N/A 또는 마지막 값)
+            updateProgramLogs(); // 초기 로그 로드
+        };
+    </script>
+</body>
+</html>
