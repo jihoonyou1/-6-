@@ -7,7 +7,7 @@
 #include <string.h>             // 문자열 처리 함수 포함
 
 #define MAX_TIMINGS     85      // DHT 센서 신호 읽기 최대 반복 횟수
-#define DHT_PIN         2       // DHT 센서가 연결된 wiringPi 핀 번호 - gpio27 - 2
+#define DHT_PIN         5       // DHT 센서가 연결된 wiringPi 핀 번호 - gpio27 - 2
 #define FPGA_TEXT_LCD_DEVICE "/dev/fpga_text_lcd" // LCD 디바이스 파일 경로
 #define MAX_BUFF        32      // LCD에 보낼 최대 버퍼 크기 (16*2)
 #define LINE_BUFF       16      // LCD 한 줄 최대 문자 수
