@@ -1,0 +1,15 @@
+[Desktop Entry]
+
+Name=web_launcher
+
+comment=Lanch the FPGA ad DHT sensor control application and view in web
+
+Exec=sudo /home/pi/fpga_web_app.sh
+
+Icon=
+
+Terminal=false
+
+Type=Application
+
+Categories=Utility;
