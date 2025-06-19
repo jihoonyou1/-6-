@@ -14,7 +14,7 @@ sudo mknod /dev/fpga_text_lcd c 263 0
 sudo mknod /dev/fpga_led c 260 0
 
 #3. PROGRAM BUILD
-cd /home/pi/-6-/fpga || { echo "NOT FOUND DIRECTORY" exit1: }
+cd /home/pi/-6-/fpga || { echo "NOT FOUND DIRECTORY"; exit 1; }
 
 gcc -o dht_fpga dht_fpga.c -lwiringPi -lrt -lpthread
 chmod +x dht_fpga
