@@ -13,6 +13,7 @@
 - dht_fpga.c : DHT22에서 받아온 온습도 데이터를 이용해 FPGA LED와 FPGA TEXT LCD에 출력하는 코드입니다.
 - gui_fpga_web.py : dht_fpga.c파일을 이용해 GUI를 생성하는 파일입니다. Flask를 이용해 웹에서 표시도 가능합니다.
 - fpga_web_app.sh : 위 두 파일과 필요한 커널 삽입을 한번에 도와주는 쉘 스크립트 파일입니다.
+- web_launcher.desktop : 바탕화면에 어플리케이션을 만들기 위한 파일입니다. 그대로 다운 받는 것보단, Desktop directory에서 직접 만들어서 저장하는 것을 추천합니다.
 - 이 외 파일은 그전 버전에 대한 코드로, 참고 용으로 남겨둔 상태입니다.
 
 
