@@ -1,7 +1,7 @@
 # -6-
 
 - 한경대학교 IoT프로그래밍 기말 과제 6조 github
-
+- 사용 방법 - 라즈베리파이 터미널에서 git clone https://github/com/jihoonyou1/-6-
 1. 프로그램 개요
 - DHT22 온습도 센서를 이용해 얻은 온습도 데이터를 이용해 라즈베리파이 내 FPGA와 Touch Screen을 이용하여 제어하는 프로그램입니다.
 
