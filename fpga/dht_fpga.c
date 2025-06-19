@@ -176,7 +176,7 @@ void read_dht_and_control() {
         char lcd_line2[LINE_BUFF + 1];
         snprintf(lcd_line1, sizeof(lcd_line1), "Temp:%.1fC %s", last_temp_c, (current_led_state & 0xF0) ? "ON" : "OFF");
         snprintf(lcd_line2, sizeof(lcd_line2), "Humi:%.1f%% %s", last_humi, (current_led_state & 0x0F) ? "ON" : "OFF");
-        write_to_lcd(lcd_line1, lcd_lin프
+        write_to_lcd(lcd_line1, lcd_line2);
     while (1) {
         read_dht_and_control();
         delay(4000); // 읽기 / 업데이트는 4초 간격
