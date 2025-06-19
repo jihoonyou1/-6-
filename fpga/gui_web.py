@@ -36,7 +36,7 @@ def run_flask_app():
     # 0.0.0.0으로 설정하면 모든 네트워크 인터페이스에서 접근 가능
     # port는 원하는 포트 번호로 설정 (예: 5000)
     print("Starting Flask web server on port 5000...")
-    app.run(host='0.0.0.0', port=4000, debug=False) # debug=True는 개발용, 배포시에는 False
+    app.run(host='0.0.0.0', port=5000, debug=False) # debug=True는 개발용, 배포시에는 False
 
 # (기존 start_control 함수는 그대로 유지)
 def start_control():
