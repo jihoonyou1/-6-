@@ -6,8 +6,8 @@ echo "FPGA driver setting & LAUNCH PROGRAM"
 cd /home/pi/Modules || { echo "NOT FOUND DIRECTORY"; exit 1; }
 
 sudo insmod fpga_interface_driver.ko
-sudo insmod fpga_text_lcd_driver .ko
-sudo insmod fpga_led_driver .ko
+sudo insmod fpga_text_lcd_driver.ko
+sudo insmod fpga_led_driver.ko
 
 #2. DEVICE NODE
 sudo mknod /dev/fpga_text_lcd c 263 0
